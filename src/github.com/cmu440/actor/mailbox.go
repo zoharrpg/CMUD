@@ -1,5 +1,9 @@
 package actor
 
+import (
+	"sync"
+)
+
 // A mailbox, i.e., a thread-safe unbounded FIFO queue.
 //
 // You can think of Mailbox like a Go channel with an infinite buffer.
@@ -7,13 +11,20 @@ package actor
 // Mailbox is only exported outside of the actor package for use in tests;
 // we do not expect you to use it, just implement it.
 type Mailbox struct {
+	mu      sync.Mutex
+	message []any
+	closed  bool
+	cond    *sync.Cond
+
 	// TODO (3A): implement this!
 }
 
 // Returns a new mailbox that is ready for use.
 func NewMailbox() *Mailbox {
+	mailbox := &Mailbox{}
+	mailbox.cond = sync.NewCond(&mailbox.mu)
 	// TODO (3A): implement this!
-	return nil
+	return mailbox
 }
 
 // Pushes message onto the end of the mailbox's FIFO queue.
@@ -26,6 +37,12 @@ func NewMailbox() *Mailbox {
 // Note: message is not a literal actor message; it is an ActorSystem
 // wrapper around a marshalled actor message.
 func (mailbox *Mailbox) Push(message any) {
+	mailbox.mu.Lock()
+	defer mailbox.mu.Unlock()
+	if !mailbox.closed {
+		mailbox.message = append(mailbox.message, message)
+		mailbox.cond.Signal()
+	}
 	// TODO (3A): implement this!
 }
 
@@ -37,7 +54,20 @@ func (mailbox *Mailbox) Push(message any) {
 // (message, true).
 func (mailbox *Mailbox) Pop() (message any, ok bool) {
 	// TODO (3A): implement this!
-	return nil, true
+	mailbox.mu.Lock()
+	defer mailbox.mu.Unlock()
+
+	for len(mailbox.message) == 0 && !mailbox.closed {
+		mailbox.cond.Wait()
+	}
+	if len(mailbox.message) > 0 && !mailbox.closed {
+		message = mailbox.message[0]
+		mailbox.message = mailbox.message[1:]
+		ok = true
+		return message, ok
+	}
+
+	return nil, false
 }
 
 // Closes the mailbox, causing future Pop() calls to return (nil, false)
@@ -46,5 +76,12 @@ func (mailbox *Mailbox) Pop() (message any, ok bool) {
 // If Close() has already been called, this may exhibit undefined behavior,
 // including blocking indefinitely.
 func (mailbox *Mailbox) Close() {
+	mailbox.mu.Lock()
+	defer mailbox.mu.Unlock()
+
+	if !mailbox.closed {
+		mailbox.closed = true
+		mailbox.cond.Broadcast()
+	}
 	// TODO (3A): implement this!
 }
