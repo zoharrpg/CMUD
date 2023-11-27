@@ -4,6 +4,8 @@ package kvclient
 
 import (
 	"fmt"
+	"github.com/cmu440/kvcommon"
+	"net/rpc"
 )
 
 // Type for client.router.
@@ -36,6 +38,7 @@ type Client struct {
 func NewClient(router QueryRouter) *Client {
 	return &Client{
 		router,
+
 		// TODO (3A): implement this! (if needed)
 	}
 }
@@ -51,7 +54,23 @@ func NewClient(router QueryRouter) *Client {
 // router.NextAddr(), that error is returned instead.
 func (client *Client) Get(key string) (value string, ok bool, err error) {
 	// TODO (3A): implement this!
-	return "", false, fmt.Errorf("Not implemented")
+	addr := client.router.NextAddr()
+	c, err := rpc.Dial("tcp", addr)
+	if err != nil {
+		fmt.Println(err)
+		return "", false, nil
+	}
+	args := kvcommon.GetArgs{Key: key}
+	reply := kvcommon.GetReply{}
+	err = c.Call("QueryReceiver.Get", args, &reply)
+
+	if err != nil {
+		fmt.Println(err)
+		return "", false, nil
+
+	}
+
+	return reply.Value, reply.Ok, nil
 }
 
 // Returns a map containing all (key, value) pairs whose key starts with prefix,
@@ -61,7 +80,23 @@ func (client *Client) Get(key string) (value string, ok bool, err error) {
 // router.NextAddr(), that error is returned instead.
 func (client *Client) List(prefix string) (entries map[string]string, err error) {
 	// TODO (3A): implement this!
-	return nil, fmt.Errorf("Not implemented")
+	addr := client.router.NextAddr()
+	c, err := rpc.Dial("tcp", addr)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	args := kvcommon.ListArgs{Prefix: prefix}
+	reply := kvcommon.ListReply{}
+	err = c.Call("QueryReceiver.List", args, &reply)
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+
+	}
+
+	return reply.Entries, nil
 }
 
 // Sets the value associated with key.
@@ -70,7 +105,23 @@ func (client *Client) List(prefix string) (entries map[string]string, err error)
 // router.NextAddr(), that error is returned instead.
 func (client *Client) Put(key string, value string) error {
 	// TODO (3A): implement this!
-	return fmt.Errorf("Not implemented")
+	addr := client.router.NextAddr()
+	c, err := rpc.Dial("tcp", addr)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	args := kvcommon.PutArgs{Key: key, Value: value}
+	reply := kvcommon.PutReply{}
+	err = c.Call("QueryReceiver.Put", args, &reply)
+
+	if err != nil {
+		fmt.Println(err)
+		return err
+
+	}
+
+	return nil
 }
 
 // OPTIONAL: Closes the client, including all of its RPC clients.
