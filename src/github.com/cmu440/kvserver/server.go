@@ -3,7 +3,10 @@
 package kvserver
 
 import (
-	"fmt"
+	"github.com/cmu440/actor"
+	"net"
+	"net/rpc"
+	"strconv"
 )
 
 // A single server in the key-value store, running some number of
@@ -15,6 +18,7 @@ import (
 // consistent, last-writer-wins strategy.
 type Server struct {
 	// TODO (3A, 3B): implement this!
+
 }
 
 // OPTIONAL: Error handler for ActorSystem.OnError.
@@ -51,18 +55,29 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 	// template to start RPC servers (adapted from
 	// https://groups.google.com/g/Golang-Nuts/c/JTn3LV_bd5M/m/cMO_DLyHPeUJ ):
 	//
-	//  rpcServer := rpc.NewServer()
-	//  err := rpcServer.RegisterName("QueryReceiver", [*queryReceiver instance])
-	//  ln, err := net.Listen("tcp", ...)
-	//  go func() {
-	//    for {
-	//      conn, err := ln.Accept()
-	//      if err != nil {
-	//        return
-	//      }
-	//      go rpcServer.ServeConn(conn)
-	//    }
-	//  }()
+	s := Server{}
+
+	rpcServer := rpc.NewServer()
+	q := &queryReceiver{}
+	rpcServer.RegisterName("QueryReceiver", q)
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(startPort+1))
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go rpcServer.ServeConn(conn)
+		}
+	}()
+	actorSystem, _ := actor.NewActorSystem(startPort)
+	q.ActorSystem = actorSystem
+
+	for i := 0; i < queryActorCount; i++ {
+		rf := actorSystem.StartActor(newQueryActor)
+		q.ActorRef = rf
+
+	}
 	//
 	// - To start query actors, call your ActorSystem's
 	// StartActor(newQueryActor), where newQueryActor is defined in ./query_actor.go.
@@ -71,7 +86,7 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 	// - remoteDescs and desc: see doc comment above.
 	// For the checkpoint, it is okay to ignore remoteDescs and return "" for desc.
 
-	return nil, "", fmt.Errorf("Not implemented")
+	return &s, "", nil
 }
 
 // OPTIONAL: Closes the server, including its actor system
