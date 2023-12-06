@@ -25,6 +25,8 @@ func init() {
 	gob.Register(InitLocal{})
 	gob.Register(LocalSynSignal{})
 	gob.Register(LocalSync{})
+	gob.Register(NotifyNewServer{})
+	gob.Register(RemoteSyncSignal{})
 }
 
 type queryActor struct {
@@ -32,6 +34,7 @@ type queryActor struct {
 	context     *actor.ActorContext
 	store       map[string]StoreValue
 	ActorsInfo  []*actor.ActorRef
+	RemoteInfo  [][]*actor.ActorRef
 	Me          int
 	Logs        map[string]MPut
 	ActorSystem *actor.ActorSystem
@@ -67,11 +70,17 @@ type PutResult struct {
 type InitLocal struct {
 	ActorsInfo []*actor.ActorRef
 	Me         int
+	RemoteInfo [][]*actor.ActorRef
 }
 type LocalSynSignal struct {
 }
 type LocalSync struct {
 	Data map[string]MPut
+}
+type NotifyNewServer struct {
+	Refs []*actor.ActorRef
+}
+type RemoteSyncSignal struct {
 }
 
 // "Constructor" for queryActors, used in ActorSystem.StartActor.
@@ -84,6 +93,7 @@ func newQueryActor(context *actor.ActorContext) actor.Actor {
 		ActorsInfo: make([]*actor.ActorRef, 0),
 		Me:         -1,
 		Logs:       make(map[string]MPut),
+		RemoteInfo: make([][]*actor.ActorRef, 0),
 	}
 }
 
@@ -91,12 +101,28 @@ func newQueryActor(context *actor.ActorContext) actor.Actor {
 func (actor *queryActor) OnMessage(message any) error {
 	// TODO (3B): implement this!
 	switch m := message.(type) {
+	case NotifyNewServer:
+		actor.RemoteInfo = append(actor.RemoteInfo, m.Refs)
+		actor.context.Tell(actor.ActorsInfo[actor.Me], RemoteSyncSignal{})
+
+	case RemoteSyncSignal:
+		for _, remote := range actor.RemoteInfo {
+			for _, server := range remote {
+				actor.context.Tell(server, LocalSync{Data: actor.Logs})
+			}
+		}
+
 	case LocalSynSignal:
 		//fmt.Println("LocSynSignal Received")
 		for index, a := range actor.ActorsInfo {
 			if index != actor.Me {
 				actor.context.Tell(a, LocalSync{Data: actor.Logs})
 
+			}
+		}
+		for _, remote := range actor.RemoteInfo {
+			for _, server := range remote {
+				actor.context.Tell(server, LocalSync{Data: actor.Logs})
 			}
 		}
 
@@ -126,6 +152,7 @@ func (actor *queryActor) OnMessage(message any) error {
 
 	case InitLocal:
 		actor.ActorsInfo = append(actor.ActorsInfo, m.ActorsInfo...)
+		actor.RemoteInfo = append(actor.RemoteInfo, m.RemoteInfo...)
 		actor.Me = m.Me
 		actor.context.Tell(actor.ActorsInfo[actor.Me], LocalSynSignal{})
 

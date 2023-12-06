@@ -2,7 +2,6 @@ package actor
 
 import (
 	"net/rpc"
-	"sync"
 )
 
 type RemoteTellArgs struct {
@@ -15,8 +14,8 @@ type RemoteTellReply struct {
 	// You can define fields here if needed.
 }
 
-var mailBox *Mailbox
-var mux sync.Mutex
+//var mailBox *Mailbox
+//var mux sync.Mutex
 
 // Calls system.tellFromRemote(ref, mars) on the remote ActorSystem listening
 // on ref.Address.
@@ -30,18 +29,18 @@ func remoteTell(client *rpc.Client, ref *ActorRef, mars []byte) {
 	// TODO (3B): implement this!
 
 	args := &RemoteTellArgs{Ref: ref, Mars: mars}
-	mailBox.Push(args)
+	//mailBox.Push(args)
 
-	go func() {
-		mux.Lock()
-		defer mux.Unlock()
-		next, ok := mailBox.Pop()
-		if !ok {
-
-			return
-		}
-		client.Go("RemoteTellHandler.RemoteTell", next, nil, nil)
-	}()
+	//go func() {
+	//	mux.Lock()
+	//	defer mux.Unlock()
+	//	next, ok := mailBox.Pop()
+	//	if !ok {
+	//
+	//		return
+	//	}
+	client.Go("RemoteTellHandler.RemoteTell", args, nil, nil)
+	//}()
 	//if err != nil {
 	//	fmt.Printf("Error calling RemoteTell RPC: %v\n", err)
 	//	// Handle the error as needed.
@@ -55,7 +54,7 @@ func remoteTell(client *rpc.Client, ref *ActorRef, mars []byte) {
 // system.tellFromRemote(ref, mars).
 func registerRemoteTells(system *ActorSystem, server *rpc.Server) error {
 	// TODO (3B): implement this!
-	mailBox = NewMailbox()
+	//mailBox = NewMailbox()
 	handler := &RemoteTellHandler{
 		ActorSys: system,
 	}

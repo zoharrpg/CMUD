@@ -3,6 +3,7 @@
 package kvserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/cmu440/actor"
 	"net"
@@ -18,7 +19,8 @@ import (
 // following an eventually consistent, last-writer-wins strategy.
 type Server struct {
 	// TODO (3B): implement this!
-
+	AS        *actor.ActorSystem
+	ActorInfo []*actor.ActorRef
 }
 
 // OPTIONAL: Error handler for ActorSystem.OnError.
@@ -49,7 +51,23 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 	// - The "HTTP service" example in the net/rpc docs does not support multiple RPC servers in the same process.
 	// Instead, use the following template to start RPC servers (adapted from
 	// https://groups.google.com/g/Golang-Nuts/c/JTn3LV_bd5M/m/cMO_DLyHPeUJ ):
-	s := Server{}
+	//fmt.Println(remoteDescs)
+	RemoteServers := make([][]*actor.ActorRef, 0)
+	for _, dec := range remoteDescs {
+		var server []*actor.ActorRef
+		fmt.Println(dec)
+		err := json.Unmarshal([]byte(dec), &server)
+		if err != nil {
+			return nil, "", err
+
+		}
+		fmt.Println(server[0].Address)
+		RemoteServers = append(RemoteServers, server)
+
+	}
+
+	//fmt.Println(RemoteServers)
+
 	actorsInfo := make([]*actor.ActorRef, 0)
 	actorSystem, _ := actor.NewActorSystem(startPort)
 
@@ -69,22 +87,36 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 		}()
 		q.ActorSystem = actorSystem
 		rf := actorSystem.StartActor(newQueryActor)
-		fmt.Println("The actor is:  ", rf)
 		q.ActorRef = rf
 		actorsInfo = append(actorsInfo, rf)
 	}
-	fmt.Println("The actorInfo is ", actorsInfo)
-	for index, ref := range actorsInfo {
-		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: index})
-		//fmt.Println("Send actorsInfo:  ", )
+	for _, oldserver := range RemoteServers {
+		for _, oldactor := range oldserver {
+			actorSystem.Tell(oldactor, NotifyNewServer{actorsInfo})
+		}
+
 	}
+
+	for index, ref := range actorsInfo {
+		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: index, RemoteInfo: RemoteServers})
+	}
+
+	s := Server{AS: actorSystem, ActorInfo: actorsInfo}
+
+	jsonData, err := json.Marshal(s.ActorInfo)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return nil, "", err
+	}
+	desc = string(jsonData)
 
 	// TODO: initial remote
 
 	// - To start query actors, call your ActorSystem's StartActor(newQueryActor), where newQueryActor is defined in ./query_actor.go.
 	// Do this queryActorCount times. (For the checkpoint tests, queryActorCount will always be 1.)
 	// - remoteDescs and desc: see doc comment above. For the checkpoint, it is okay to ignore remoteDescs and return "" for desc.
-	return &s, "", nil
+
+	return &s, desc, nil
 }
 
 // Close OPTIONAL: Closes the server, including its actor system nd all RPC servers.
