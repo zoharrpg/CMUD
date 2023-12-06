@@ -90,15 +90,15 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 		q.ActorRef = rf
 		actorsInfo = append(actorsInfo, rf)
 	}
+
+	for index, ref := range actorsInfo {
+		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: index, RemoteInfo: RemoteServers})
+	}
 	for _, oldserver := range RemoteServers {
 		for _, oldactor := range oldserver {
 			actorSystem.Tell(oldactor, NotifyNewServer{actorsInfo})
 		}
 
-	}
-
-	for index, ref := range actorsInfo {
-		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: index, RemoteInfo: RemoteServers})
 	}
 
 	s := Server{AS: actorSystem, ActorInfo: actorsInfo}

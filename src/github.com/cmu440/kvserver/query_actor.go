@@ -42,7 +42,7 @@ type queryActor struct {
 type StoreValue struct {
 	Value     string
 	Timestamp int64 //millisecond resolution
-	Uid       string
+	Sender    *actor.ActorRef
 }
 type MGet struct {
 	Key    string
@@ -103,13 +103,14 @@ func (actor *queryActor) OnMessage(message any) error {
 	switch m := message.(type) {
 	case NotifyNewServer:
 		actor.RemoteInfo = append(actor.RemoteInfo, m.Refs)
-		actor.context.Tell(actor.ActorsInfo[actor.Me], RemoteSyncSignal{})
+		logs := make(map[string]MPut)
 
-	case RemoteSyncSignal:
-		for _, remote := range actor.RemoteInfo {
-			for _, server := range remote {
-				actor.context.Tell(server, LocalSync{Data: actor.Logs})
-			}
+		for k, v := range actor.store {
+			logs[k] = MPut{Key: k, Value: v.Value, Sender: v.Sender, Timestamp: v.Timestamp}
+		}
+		for _, ref := range m.Refs {
+			actor.context.Tell(ref, LocalSync{Data: logs})
+
 		}
 
 	case LocalSynSignal:
@@ -120,10 +121,15 @@ func (actor *queryActor) OnMessage(message any) error {
 
 			}
 		}
+		//for _, remote := range actor.RemoteInfo {
+		//	for _, server := range remote {
+		//		actor.context.Tell(server, LocalSync{Data: actor.Logs})
+		//	}
+		//}
 		for _, remote := range actor.RemoteInfo {
-			for _, server := range remote {
-				actor.context.Tell(server, LocalSync{Data: actor.Logs})
-			}
+
+			actor.context.Tell(remote[0], LocalSync{Data: actor.Logs})
+
 		}
 
 		actor.Logs = make(map[string]MPut)
@@ -136,7 +142,7 @@ func (actor *queryActor) OnMessage(message any) error {
 			if v, ok := actor.store[data.Key]; ok {
 				if data.Timestamp > v.Timestamp {
 					doPut = true
-				} else if data.Timestamp == v.Timestamp && data.Sender.Uid() < v.Uid {
+				} else if data.Timestamp == v.Timestamp && data.Sender.Uid() < v.Sender.Uid() {
 					doPut = true
 				}
 			} else {
@@ -144,7 +150,8 @@ func (actor *queryActor) OnMessage(message any) error {
 			}
 
 			if doPut {
-				actor.store[data.Key] = StoreValue{data.Value, data.Timestamp, data.Sender.Uid()}
+				actor.store[data.Key] = StoreValue{data.Value, data.Timestamp, data.Sender}
+				actor.Logs[data.Key] = data
 
 			}
 
@@ -166,14 +173,14 @@ func (actor *queryActor) OnMessage(message any) error {
 		if v, ok := actor.store[m.Key]; ok {
 			if m.Timestamp > v.Timestamp {
 				doPut = true
-			} else if m.Timestamp == v.Timestamp && m.Sender.Uid() < v.Uid {
+			} else if m.Timestamp == v.Timestamp && m.Sender.Uid() < v.Sender.Uid() {
 				doPut = true
 			}
 		} else {
 			doPut = true
 		}
 		if doPut {
-			actor.store[m.Key] = StoreValue{m.Value, m.Timestamp, m.Sender.Uid()}
+			actor.store[m.Key] = StoreValue{m.Value, m.Timestamp, m.Sender}
 			actor.Logs[m.Key] = m
 		}
 		result := PutResult{}
