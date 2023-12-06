@@ -74,9 +74,9 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 		actorsInfo = append(actorsInfo, rf)
 	}
 	fmt.Println("The actorInfo is ", actorsInfo)
-	for _, ref := range actorsInfo {
-		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: ref})
-		fmt.Println("Send actorsInfo:  ", ref)
+	for index, ref := range actorsInfo {
+		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: index})
+		//fmt.Println("Send actorsInfo:  ", )
 	}
 
 	// TODO: initial remote

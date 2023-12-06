@@ -3,7 +3,6 @@ package kvserver
 import (
 	"github.com/cmu440/actor"
 	"github.com/cmu440/kvcommon"
-	"time"
 )
 
 // RPC handler implementing the kvcommon.QueryReceiver interface.
@@ -43,8 +42,8 @@ func (rcvr *queryReceiver) List(args kvcommon.ListArgs, reply *kvcommon.ListRepl
 // Put implements kvcommon.QueryReceiver.Put.
 func (rcvr *queryReceiver) Put(args kvcommon.PutArgs, reply *kvcommon.PutReply) error {
 	ref, _ := rcvr.ActorSystem.NewChannelRef()
-	currentTime := time.Now().UnixMilli()
+	//currentTime := time.Now().UnixMilli()
 
-	rcvr.ActorSystem.Tell(rcvr.ActorRef, MPut{Key: args.Key, Value: args.Value, Sender: ref, Timestamp: currentTime})
+	rcvr.ActorSystem.Tell(rcvr.ActorRef, MPut{Key: args.Key, Value: args.Value, Sender: ref})
 	return nil
 }
