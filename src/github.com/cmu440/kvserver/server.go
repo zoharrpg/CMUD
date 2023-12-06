@@ -55,13 +55,13 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 	RemoteServers := make([][]*actor.ActorRef, 0)
 	for _, dec := range remoteDescs {
 		var server []*actor.ActorRef
-		fmt.Println(dec)
+		//fmt.Println(dec)
 		err := json.Unmarshal([]byte(dec), &server)
 		if err != nil {
 			return nil, "", err
 
 		}
-		fmt.Println(server[0].Address)
+		//fmt.Println(server[0].Address)
 		RemoteServers = append(RemoteServers, server)
 
 	}
