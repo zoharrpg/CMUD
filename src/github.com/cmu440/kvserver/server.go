@@ -3,6 +3,7 @@
 package kvserver
 
 import (
+	"fmt"
 	"github.com/cmu440/actor"
 	"net"
 	"net/rpc"
@@ -49,28 +50,36 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 	// Instead, use the following template to start RPC servers (adapted from
 	// https://groups.google.com/g/Golang-Nuts/c/JTn3LV_bd5M/m/cMO_DLyHPeUJ ):
 	s := Server{}
-
-	rpcServer := rpc.NewServer()
-	q := &queryReceiver{}
-	rpcServer.RegisterName("QueryReceiver", q)
-	ln, err := net.Listen("tcp", ":"+strconv.Itoa(startPort+1))
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go rpcServer.ServeConn(conn)
-		}
-	}()
+	actorsInfo := make([]*actor.ActorRef, 0)
 	actorSystem, _ := actor.NewActorSystem(startPort)
-	q.ActorSystem = actorSystem
 
-	for i := 0; i < queryActorCount; i++ {
+	for i := 1; i < queryActorCount+1; i++ {
+		rpcServer := rpc.NewServer()
+		q := &queryReceiver{}
+		rpcServer.RegisterName("QueryReceiver", q)
+		ln, _ := net.Listen("tcp", ":"+strconv.Itoa(startPort+i))
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go rpcServer.ServeConn(conn)
+			}
+		}()
+		q.ActorSystem = actorSystem
 		rf := actorSystem.StartActor(newQueryActor)
+		fmt.Println("The actor is:  ", rf)
 		q.ActorRef = rf
-
+		actorsInfo = append(actorsInfo, rf)
 	}
+	fmt.Println("The actorInfo is ", actorsInfo)
+	for _, ref := range actorsInfo {
+		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: ref})
+		fmt.Println("Send actorsInfo:  ", ref)
+	}
+
+	// TODO: initial remote
 
 	// - To start query actors, call your ActorSystem's StartActor(newQueryActor), where newQueryActor is defined in ./query_actor.go.
 	// Do this queryActorCount times. (For the checkpoint tests, queryActorCount will always be 1.)

@@ -3,6 +3,7 @@ package kvserver
 import (
 	"github.com/cmu440/actor"
 	"github.com/cmu440/kvcommon"
+	"time"
 )
 
 // RPC handler implementing the kvcommon.QueryReceiver interface.
@@ -24,14 +25,15 @@ func (rcvr *queryReceiver) Get(args kvcommon.GetArgs, reply *kvcommon.GetReply) 
 	ref, channel := rcvr.ActorSystem.NewChannelRef()
 	rcvr.ActorSystem.Tell(rcvr.ActorRef, MGet{Key: args.Key, Sender: ref})
 	tmp := <-channel
-	reply.Value = tmp.(Result).Value
-	reply.Ok = tmp.(Result).Ok
+	reply.Value = tmp.(GetResult).Value
+	reply.Ok = tmp.(GetResult).Ok
 	return nil
 }
 
 // List implements kvcommon.QueryReceiver.List.
 func (rcvr *queryReceiver) List(args kvcommon.ListArgs, reply *kvcommon.ListReply) error {
 	ref, channel := rcvr.ActorSystem.NewChannelRef()
+
 	rcvr.ActorSystem.Tell(rcvr.ActorRef, MList{Prefix: args.Prefix, Sender: ref})
 	tmp := <-channel
 	reply.Entries = tmp.(ListResult).Pair
@@ -41,6 +43,8 @@ func (rcvr *queryReceiver) List(args kvcommon.ListArgs, reply *kvcommon.ListRepl
 // Put implements kvcommon.QueryReceiver.Put.
 func (rcvr *queryReceiver) Put(args kvcommon.PutArgs, reply *kvcommon.PutReply) error {
 	ref, _ := rcvr.ActorSystem.NewChannelRef()
-	rcvr.ActorSystem.Tell(rcvr.ActorRef, MPut{Key: args.Key, Value: args.Value, Sender: ref})
+	currentTime := time.Now().UnixMilli()
+
+	rcvr.ActorSystem.Tell(rcvr.ActorRef, MPut{Key: args.Key, Value: args.Value, Sender: ref, Timestamp: currentTime})
 	return nil
 }
