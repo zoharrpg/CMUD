@@ -18,7 +18,6 @@ import (
 // Different query actors (both within this server and across connected servers) periodically sync updates (Puts)
 // following an eventually consistent, last-writer-wins strategy.
 type Server struct {
-	// TODO (3B): implement this!
 	AS        *actor.ActorSystem
 	ActorInfo []*actor.ActorRef
 }
@@ -45,36 +44,20 @@ func errorHandler(err error) {
 // Before returning, NewServer starts the ActorSystem, all query actors, and all query RPC servers.
 // If there is an error starting anything, that error is returned instead.
 func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server *Server, desc string, err error) {
-	// TODO (3B): implement this!
-
 	// Tips:
 	// - The "HTTP service" example in the net/rpc docs does not support multiple RPC servers in the same process.
 	// Instead, use the following template to start RPC servers (adapted from
 	// https://groups.google.com/g/Golang-Nuts/c/JTn3LV_bd5M/m/cMO_DLyHPeUJ ):
-	//fmt.Println(remoteDescs)
-	RemoteServers := make([][]*actor.ActorRef, 0)
-	for _, dec := range remoteDescs {
-		var server []*actor.ActorRef
-		//fmt.Println(dec)
-		err := json.Unmarshal([]byte(dec), &server)
-		if err != nil {
-			return nil, "", err
-
-		}
-		//fmt.Println(server[0].Address)
-		RemoteServers = append(RemoteServers, server)
-
-	}
-
-	//fmt.Println(RemoteServers)
-
 	actorsInfo := make([]*actor.ActorRef, 0)
 	actorSystem, _ := actor.NewActorSystem(startPort)
 
 	for i := 1; i < queryActorCount+1; i++ {
 		rpcServer := rpc.NewServer()
 		q := &queryReceiver{}
-		rpcServer.RegisterName("QueryReceiver", q)
+		err := rpcServer.RegisterName("QueryReceiver", q)
+		if err != nil {
+			return nil, "", err
+		}
 		ln, _ := net.Listen("tcp", ":"+strconv.Itoa(startPort+i))
 		go func() {
 			for {
@@ -91,14 +74,27 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 		actorsInfo = append(actorsInfo, rf)
 	}
 
-	for index, ref := range actorsInfo {
-		actorSystem.Tell(ref, InitLocal{ActorsInfo: actorsInfo, Me: index, RemoteInfo: RemoteServers})
-	}
-	for _, oldserver := range RemoteServers {
-		for _, oldactor := range oldserver {
-			actorSystem.Tell(oldactor, NotifyNewServer{actorsInfo})
-		}
+	// - To start query actors, call your ActorSystem's StartActor(newQueryActor), where newQueryActor is defined in ./query_actor.go.
+	// Do this queryActorCount times. (For the checkpoint tests, queryActorCount will always be 1.)
+	// - remoteDescs and desc: see doc comment above. For the checkpoint, it is okay to ignore remoteDescs and return "" for desc.
+	RemoteServers := make([][]*actor.ActorRef, 0)
+	for _, dec := range remoteDescs {
+		var server []*actor.ActorRef
+		err := json.Unmarshal([]byte(dec), &server)
+		if err != nil {
+			return nil, "", err
 
+		}
+		RemoteServers = append(RemoteServers, server)
+	}
+
+	for index, ref := range actorsInfo {
+		actorSystem.Tell(ref, Init{ActorsInfo: actorsInfo, Me: index, RemoteInfo: RemoteServers})
+	}
+	for _, oldServer := range RemoteServers {
+		for _, oldActor := range oldServer {
+			actorSystem.Tell(oldActor, NotifyNewServer{actorsInfo})
+		}
 	}
 
 	s := Server{AS: actorSystem, ActorInfo: actorsInfo}
@@ -109,12 +105,6 @@ func NewServer(startPort int, queryActorCount int, remoteDescs []string) (server
 		return nil, "", err
 	}
 	desc = string(jsonData)
-
-	// TODO: initial remote
-
-	// - To start query actors, call your ActorSystem's StartActor(newQueryActor), where newQueryActor is defined in ./query_actor.go.
-	// Do this queryActorCount times. (For the checkpoint tests, queryActorCount will always be 1.)
-	// - remoteDescs and desc: see doc comment above. For the checkpoint, it is okay to ignore remoteDescs and return "" for desc.
 
 	return &s, desc, nil
 }
